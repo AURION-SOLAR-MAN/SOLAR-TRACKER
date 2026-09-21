@@ -467,8 +467,7 @@
   <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmpFQdsOskyb_WQExQ1AC9A2G2nRSCnrmh6Cf7i_iCXHpRXCW41BoDbGalpDiD8OQw/exec";
 
-    // One-way SHA-256 hash fingerprint for your PIN 2026.
-    // Nobody looking at GitHub can decode or know your PIN from this hash!
+    // Encrypted hash of PIN (Nobody can read your real PIN from GitHub!)
     const AUTH_HASH = "f210d79fa55374465492d5231c5b8b9f1d092d6e3ae30811e56b4604d55b0a33";
 
     let projects = [];
@@ -492,12 +491,11 @@
     const editForm = document.getElementById('editForm');
     const editFormError = document.getElementById('editFormError');
 
-    // SHA-256 cryptographic hashing helper
-    async function sha256(message) {
-      const msgBuffer = new TextEncoder().encode(message);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    // SHA-256 Hash Function
+    async function sha256(str) {
+      const buffer = new TextEncoder().encode(str);
+      const hash = await crypto.subtle.digest('SHA-256', buffer);
+      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
     function toggleLoanAmount(prefix) {
@@ -533,13 +531,11 @@
     }
 
     async function checkPin() {
-      const enteredPin = pinInput.value.trim();
-      if (!enteredPin) return;
+      const val = pinInput.value.trim();
+      const hash = await sha256(val);
 
-      const hashed = await sha256(enteredPin);
-
-      if (hashed === AUTH_HASH) {
-        sessionStorage.setItem('solar_auth_status', 'granted');
+      if (hash === AUTH_HASH) {
+        sessionStorage.setItem('solar_auth', 'ok');
         loginOverlay.style.display = 'none';
         mainContainer.style.display = 'block';
         loginError.style.display = 'none';
@@ -556,7 +552,7 @@
     });
 
     function logout() {
-      sessionStorage.removeItem('solar_auth_status');
+      sessionStorage.removeItem('solar_auth');
       projects = [];
       render();
       mainContainer.style.display = 'none';
@@ -565,7 +561,7 @@
       pinInput.focus();
     }
 
-    if (sessionStorage.getItem('solar_auth_status') === 'granted') {
+    if (sessionStorage.getItem('solar_auth') === 'ok') {
       loginOverlay.style.display = 'none';
       mainContainer.style.display = 'block';
       fetchProjects();
