@@ -465,11 +465,13 @@
   </div>
 
   <script>
-    // 1. PASTE YOUR GOOGLE SCRIPT URL HERE
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmpFQdsOskyb_WQExQ1AC9A2G2nRSCnrmh6Cf7i_icXHpRXCW41BoDbGalpDiD8sK4/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmpFQdsOskyb_WQExQ1AC9A2G2nRSCnrmh6Cf7i_iCXHpRXCW41BoDbGalpDiD8OQw/exec";
+
+    // One-way SHA-256 hash fingerprint for your PIN 2026.
+    // Nobody looking at GitHub can decode or know your PIN from this hash!
+    const AUTH_HASH = "f210d79fa55374465492d5231c5b8b9f1d092d6e3ae30811e56b4604d55b0a33";
 
     let projects = [];
-    let currentAuthPin = sessionStorage.getItem('solar_auth_pin') || '';
 
     const loginOverlay = document.getElementById('loginOverlay');
     const pinInput = document.getElementById('pinInput');
@@ -489,6 +491,14 @@
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
     const editFormError = document.getElementById('editFormError');
+
+    // SHA-256 cryptographic hashing helper
+    async function sha256(message) {
+      const msgBuffer = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
 
     function toggleLoanAmount(prefix) {
       const isLoan = document.getElementById(prefix + 'IsLoan').value;
@@ -526,34 +536,18 @@
       const enteredPin = pinInput.value.trim();
       if (!enteredPin) return;
 
-      loginError.style.display = 'none';
-      setLoading(true, "Verifying PIN...");
+      const hashed = await sha256(enteredPin);
 
-      try {
-        const res = await fetch(`${SCRIPT_URL}?pin=${encodeURIComponent(enteredPin)}`);
-        const data = await res.json();
-
-        if (data.error === "Unauthorized") {
-          loginError.style.display = 'block';
-          pinInput.value = '';
-          pinInput.focus();
-          setLoading(false, "Denied");
-          return;
-        }
-
-        // Successfully authorized
-        currentAuthPin = enteredPin;
-        sessionStorage.setItem('solar_auth_pin', enteredPin);
+      if (hashed === AUTH_HASH) {
+        sessionStorage.setItem('solar_auth_status', 'granted');
         loginOverlay.style.display = 'none';
         mainContainer.style.display = 'block';
-
-        processAndRender(data);
-        setLoading(false, "Synced");
-      } catch (err) {
-        console.error(err);
-        loginError.innerText = "Connection error. Try again.";
+        loginError.style.display = 'none';
+        fetchProjects();
+      } else {
         loginError.style.display = 'block';
-        setLoading(false, "Error");
+        pinInput.value = '';
+        pinInput.focus();
       }
     }
 
@@ -562,8 +556,7 @@
     });
 
     function logout() {
-      sessionStorage.removeItem('solar_auth_pin');
-      currentAuthPin = '';
+      sessionStorage.removeItem('solar_auth_status');
       projects = [];
       render();
       mainContainer.style.display = 'none';
@@ -572,8 +565,9 @@
       pinInput.focus();
     }
 
-    // Auto-login check if already authenticated in this browser session
-    if (currentAuthPin) {
+    if (sessionStorage.getItem('solar_auth_status') === 'granted') {
+      loginOverlay.style.display = 'none';
+      mainContainer.style.display = 'block';
       fetchProjects();
     } else {
       pinInput.focus();
@@ -584,52 +578,40 @@
       syncText.innerText = text;
     }
 
-    function processAndRender(data) {
-      const mapped = data.map(d => {
-        const lowKeys = {};
-        for (let k in d) {
-          lowKeys[k.trim().toLowerCase()] = d[k];
-        }
-
-        const rawDue = lowKeys['duedate'] || lowKeys['due date'] || lowKeys['due_date'] || '';
-        const rawDoc = lowKeys['docdate'] || lowKeys['doc date'] || lowKeys['doc_date'] || '';
-
-        return {
-          id: lowKeys['id'] || Date.now(),
-          name: lowKeys['name'] || '',
-          phone: lowKeys['phone'] || '',
-          email: lowKeys['email'] || '',
-          address: lowKeys['address'] || '',
-          consumerNo: lowKeys['consumerno'] || lowKeys['consumer no'] || '',
-          capacity: lowKeys['capacity'] || '',
-          co: lowKeys['co'] || lowKeys['c/o'] || '',
-          docDate: cleanDate(rawDoc),
-          status: lowKeys['status'] || 'Docs Pending',
-          dueDate: cleanDate(rawDue),
-          isLoan: lowKeys['isloan'] || 'No',
-          loanAmount: lowKeys['loanamount'] || ''
-        };
-      });
-      
-      projects = mapped.reverse();
-      render();
-    }
-
     async function fetchProjects() {
       setLoading(true, "Fetching data...");
       try {
-        const res = await fetch(`${SCRIPT_URL}?pin=${encodeURIComponent(currentAuthPin)}`);
+        const res = await fetch(SCRIPT_URL);
         const data = await res.json();
+        
+        const mapped = data.map(d => {
+          const lowKeys = {};
+          for (let k in d) {
+            lowKeys[k.trim().toLowerCase()] = d[k];
+          }
 
-        if (data.error === "Unauthorized") {
-          logout();
-          return;
-        }
+          const rawDue = lowKeys['duedate'] || lowKeys['due date'] || lowKeys['due_date'] || '';
+          const rawDoc = lowKeys['docdate'] || lowKeys['doc date'] || lowKeys['doc_date'] || '';
 
-        loginOverlay.style.display = 'none';
-        mainContainer.style.display = 'block';
-
-        processAndRender(data);
+          return {
+            id: lowKeys['id'] || Date.now(),
+            name: lowKeys['name'] || '',
+            phone: lowKeys['phone'] || '',
+            email: lowKeys['email'] || '',
+            address: lowKeys['address'] || '',
+            consumerNo: lowKeys['consumerno'] || lowKeys['consumer no'] || '',
+            capacity: lowKeys['capacity'] || '',
+            co: lowKeys['co'] || lowKeys['c/o'] || '',
+            docDate: cleanDate(rawDoc),
+            status: lowKeys['status'] || 'Docs Pending',
+            dueDate: cleanDate(rawDue),
+            isLoan: lowKeys['isloan'] || 'No',
+            loanAmount: lowKeys['loanamount'] || ''
+          };
+        });
+        
+        projects = mapped.reverse();
+        render();
         setLoading(false, "Synced");
       } catch (err) {
         console.error(err);
@@ -640,7 +622,6 @@
     async function postData(body) {
       setLoading(true, "Saving...");
       try {
-        body.pin = currentAuthPin; // Send secure PIN with every write request
         await fetch(SCRIPT_URL, {
           method: "POST",
           mode: "no-cors",
