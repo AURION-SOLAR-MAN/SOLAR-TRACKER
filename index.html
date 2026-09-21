@@ -118,7 +118,7 @@
 
     .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
     .table-container { overflow-x: auto; background: var(--card); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; min-width: 1050px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; min-width: 1100px; }
     th, td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     th { background: #f8fafc; color: #475569; font-weight: 600; }
     tr:hover { background: #f8fafc; }
@@ -135,6 +135,7 @@
     .badge-overdue { background: #fee2e2; color: #991b1b; }
     .badge-active { background: #dbeafe; color: #1e40af; }
     .badge-co { background: #ede9fe; color: #6b21a8; }
+    .badge-loan { background: #fef08a; color: #854d0e; }
 
     .action-group { display: flex; gap: 6px; }
     .action-btn {
@@ -292,6 +293,17 @@
             <input type="number" step="0.1" id="custCapacity" required placeholder="e.g. 3.3">
           </div>
           <div>
+            <label>Loan Required?</label>
+            <select id="custIsLoan" onchange="toggleLoanAmount('cust')">
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </div>
+          <div id="custLoanAmountBox" style="display: none;">
+            <label>Loan Amount (₹)</label>
+            <input type="number" id="custLoanAmount" placeholder="e.g. 150000">
+          </div>
+          <div>
             <label>Address</label>
             <input type="text" id="custAddress" placeholder="Location, Landmark">
           </div>
@@ -356,6 +368,7 @@
             <th>Customer Info</th>
             <th>C/O</th>
             <th>Consumer No / Cap</th>
+            <th>Loan Details</th>
             <th>Docs Date</th>
             <th>Status</th>
             <th>Due Date</th>
@@ -400,6 +413,17 @@
           <div>
             <label>Plant Capacity (kW) *</label>
             <input type="number" step="0.1" id="editCapacity" required>
+          </div>
+          <div>
+            <label>Loan Required?</label>
+            <select id="editIsLoan" onchange="toggleLoanAmount('edit')">
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </div>
+          <div id="editLoanAmountBox" style="display: none;">
+            <label>Loan Amount (₹)</label>
+            <input type="number" id="editLoanAmount" placeholder="e.g. 150000">
           </div>
           <div>
             <label>Address</label>
@@ -468,9 +492,36 @@
     const editForm = document.getElementById('editForm');
     const editFormError = document.getElementById('editFormError');
 
-    // Helper: Normalize consumer numbers for strict duplicate checks (removes whitespace, hyphens)
+    function toggleLoanAmount(prefix) {
+      const isLoan = document.getElementById(prefix + 'IsLoan').value;
+      const amountBox = document.getElementById(prefix + 'LoanAmountBox');
+      if (isLoan === 'Yes') {
+        amountBox.style.display = 'block';
+      } else {
+        amountBox.style.display = 'none';
+        document.getElementById(prefix + 'LoanAmount').value = '';
+      }
+    }
+
     function cleanConsumerNo(str) {
       return String(str || '').replace(/[\s-]/g, '').toLowerCase();
+    }
+
+    function cleanDate(val) {
+      if (!val) return '';
+      if (typeof val === 'string') {
+        const clean = val.trim();
+        if (clean.includes('T')) return clean.split('T')[0];
+        if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+      }
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      return '';
     }
 
     function checkPin() {
@@ -522,22 +573,37 @@
       try {
         const res = await fetch(SCRIPT_URL);
         const data = await res.json();
-        const mapped = data.map(d => ({
-          id: d.id,
-          name: d.name,
-          phone: d.phone,
-          email: d.email || '',
-          address: d.address || '',
-          consumerNo: d.consumerno || d.consumerNo,
-          capacity: d.capacity,
-          co: d.co || '',
-          docDate: d.docdate ? String(d.docdate).split('T')[0] : '',
-          status: d.status,
-          dueDate: d.duedate ? String(d.duedate).split('T')[0] : ''
-        }));
+        
+        const mapped = data.map(d => {
+          const lowKeys = {};
+          for (let k in d) {
+            lowKeys[k.trim().toLowerCase()] = d[k];
+          }
 
+          const rawDue = lowKeys['duedate'] || lowKeys['due date'] || lowKeys['due_date'] || '';
+          const rawDoc = lowKeys['docdate'] || lowKeys['doc date'] || lowKeys['doc_date'] || '';
+
+          return {
+            id: lowKeys['id'] || Date.now(),
+            name: lowKeys['name'] || '',
+            phone: lowKeys['phone'] || '',
+            email: lowKeys['email'] || '',
+            address: lowKeys['address'] || '',
+            consumerNo: lowKeys['consumerno'] || lowKeys['consumer no'] || '',
+            capacity: lowKeys['capacity'] || '',
+            co: lowKeys['co'] || lowKeys['c/o'] || '',
+            docDate: cleanDate(rawDoc),
+            status: lowKeys['status'] || 'Docs Pending',
+            dueDate: cleanDate(rawDue),
+            isLoan: lowKeys['isloan'] || 'No',
+            loanAmount: lowKeys['loanamount'] || ''
+          };
+        });
+        
         projects = mapped.reverse();
+
         render();
+        setLoading(false, "Synced");
       } catch (err) {
         console.error(err);
         setLoading(false, "Sync Error");
@@ -560,7 +626,6 @@
       }
     }
 
-    // Add Customer Form Submit with Duplicate Checking
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       addFormError.style.display = 'none';
@@ -568,7 +633,6 @@
       const inputConsumer = document.getElementById('custConsumerNo').value.trim();
       const cleanedInput = cleanConsumerNo(inputConsumer);
 
-      // Check if consumer number already exists in projects list
       const existing = projects.find(p => cleanConsumerNo(p.consumerNo) === cleanedInput);
       if (existing) {
         addFormError.innerText = `⚠️ Error: Consumer No "${inputConsumer}" already exists under customer "${existing.name}"!`;
@@ -579,6 +643,9 @@
       }
 
       submitBtn.disabled = true;
+
+      const isLoanVal = document.getElementById('custIsLoan').value;
+      const loanAmtVal = isLoanVal === 'Yes' ? document.getElementById('custLoanAmount').value.trim() : '';
 
       const newProj = {
         id: Date.now(),
@@ -591,7 +658,9 @@
         capacity: document.getElementById('custCapacity').value.trim(),
         docDate: document.getElementById('custDocDate').value || '',
         status: document.getElementById('custStatus').value,
-        dueDate: document.getElementById('custDueDate').value || ''
+        dueDate: document.getElementById('custDueDate').value || '',
+        isLoan: isLoanVal,
+        loanAmount: loanAmtVal
       };
 
       projects.unshift(newProj);
@@ -599,6 +668,7 @@
 
       await postData({ action: "ADD", data: newProj });
       form.reset();
+      toggleLoanAmount('cust');
       submitBtn.disabled = false;
     });
 
@@ -614,6 +684,9 @@
       document.getElementById('editCO').value = proj.co || '';
       document.getElementById('editConsumerNo').value = proj.consumerNo || '';
       document.getElementById('editCapacity').value = proj.capacity || '';
+      document.getElementById('editIsLoan').value = proj.isLoan || 'No';
+      document.getElementById('editLoanAmount').value = proj.loanAmount || '';
+      toggleLoanAmount('edit');
       document.getElementById('editAddress').value = proj.address || '';
       document.getElementById('editDocDate').value = proj.docDate || '';
       document.getElementById('editStatus').value = proj.status || 'Docs Pending';
@@ -627,7 +700,6 @@
       editFormError.style.display = 'none';
     }
 
-    // Edit Form Submit with Duplicate Checking
     editForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       editFormError.style.display = 'none';
@@ -636,7 +708,6 @@
       const inputConsumer = document.getElementById('editConsumerNo').value.trim();
       const cleanedInput = cleanConsumerNo(inputConsumer);
 
-      // Check if another customer already has this consumer number
       const duplicate = projects.find(p => String(p.id) !== String(id) && cleanConsumerNo(p.consumerNo) === cleanedInput);
       if (duplicate) {
         editFormError.innerText = `⚠️ Error: Consumer No "${inputConsumer}" is already used by "${duplicate.name}"!`;
@@ -648,12 +719,17 @@
 
       const proj = projects.find(p => String(p.id) === String(id));
       if (proj) {
+        const isLoanVal = document.getElementById('editIsLoan').value;
+        const loanAmtVal = isLoanVal === 'Yes' ? document.getElementById('editLoanAmount').value.trim() : '';
+
         proj.name = document.getElementById('editName').value.trim();
         proj.phone = document.getElementById('editPhone').value.trim();
         proj.email = document.getElementById('editEmail').value.trim();
         proj.co = document.getElementById('editCO').value.trim();
         proj.consumerNo = inputConsumer;
         proj.capacity = document.getElementById('editCapacity').value.trim();
+        proj.isLoan = isLoanVal;
+        proj.loanAmount = loanAmtVal;
         proj.address = document.getElementById('editAddress').value.trim();
         proj.docDate = document.getElementById('editDocDate').value || '';
         proj.status = document.getElementById('editStatus').value;
@@ -693,7 +769,7 @@
     function render() {
       const q = searchFilter.value.toLowerCase();
       const stage = stageFilter.value;
-      const today = new Date().toISOString().split('T')[0];
+      const today = cleanDate(new Date());
 
       const coKeywords = coFilter.value
         .toLowerCase()
@@ -751,6 +827,11 @@
           ? `<span class="badge ${isOverdue ? 'badge-overdue' : 'badge-active'}">Due: ${p.dueDate}</span>` 
           : `<span style="color:#94a3b8">None</span>`;
 
+        const hasLoan = String(p.isLoan).toLowerCase() === 'yes';
+        const loanDisplay = hasLoan
+          ? `<span class="badge badge-loan">Loan: Yes</span><br><small style="font-weight:600; color:#1e293b;">₹${Number(p.loanAmount || 0).toLocaleString('en-IN')}</small>`
+          : `<span style="color:#64748b; font-size:0.85rem;">Loan: No</span>`;
+
         return `
           <tr>
             <td style="text-align: center; font-weight: bold; color: #64748b;">${index + 1}</td>
@@ -765,6 +846,9 @@
             <td>
               <strong>${p.consumerNo}</strong><br>
               <small style="color:#64748b;">${p.capacity} kW</small>
+            </td>
+            <td>
+              ${loanDisplay}
             </td>
             <td>
               ${p.docDate ? `<strong>${p.docDate}</strong>` : `<span style="color:#94a3b8">Not Set</span>`}
