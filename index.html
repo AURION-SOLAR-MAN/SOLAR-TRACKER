@@ -17,7 +17,7 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background: var(--bg); color: var(--text); padding: 16px; }
-    .container { max-width: 1400px; margin: 0 auto; display: none; }
+    .container { max-width: 1450px; margin: 0 auto; display: none; }
     
     /* Login Lock Screen */
     .login-overlay {
@@ -63,7 +63,7 @@
 
     .metrics-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
       gap: 10px;
       margin-bottom: 20px;
     }
@@ -74,7 +74,7 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.06);
       border-left: 4px solid var(--primary);
     }
-    .metric-title { font-size: 0.72rem; color: #64748b; text-transform: uppercase; font-weight: 600; }
+    .metric-title { font-size: 0.70rem; color: #64748b; text-transform: uppercase; font-weight: 600; }
     .metric-val { font-size: 1.35rem; font-weight: bold; margin-top: 4px; }
 
     .card {
@@ -180,8 +180,8 @@
   <div class="login-overlay" id="loginOverlay">
     <div class="login-card">
       <h2>Solar Tracker Access</h2>
-      <p>Enter your 4-digit PIN to view data</p>
-      <input type="password" id="pinInput" maxlength="8" placeholder="••••" autocomplete="off">
+      <p>Enter your PIN to view data</p>
+      <input type="password" id="pinInput" maxlength="10" placeholder="••••" autocomplete="off">
       <button class="btn-primary" style="width: 100%; margin-top: 4px;" onclick="checkPin()">Unlock Tracker</button>
       <div class="login-error" id="loginError">Incorrect PIN. Try again.</div>
     </div>
@@ -229,9 +229,21 @@
         <div class="metric-title">KSEB Compl.</div>
         <div class="metric-val" id="count-kseb">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #10b981;">
+      <div class="metric-card" style="border-left-color: #0284c7;">
+        <div class="metric-title">Online Compl.</div>
+        <div class="metric-val" id="count-online">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #14b8a6;">
         <div class="metric-title">Commissioning</div>
         <div class="metric-val" id="count-comm">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #f97316;">
+        <div class="metric-title">Subsidy Req.</div>
+        <div class="metric-val" id="count-subreq">0</div>
+      </div>
+      <div class="metric-card" style="border-left-color: #10b981;">
+        <div class="metric-title">Subsidy Claimed</div>
+        <div class="metric-val" id="count-subclaimed">0</div>
       </div>
       <div class="metric-card" style="border-left-color: #ef4444;">
         <div class="metric-title">Overdue Action</div>
@@ -286,9 +298,11 @@
               <option value="Loan Sanction Pending">Loan Sanction Pending</option>
               <option value="Work Pending">Work Pending</option>
               <option value="KSEB Completion Pending">KSEB Completion Pending</option>
+              <option value="KSEB Online Completion">KSEB Online Completion</option>
               <option value="Bank Completion Pending">Bank Completion Pending</option>
               <option value="Commissioning Pending">Commissioning Pending</option>
-              <option value="Completed">Completed</option>
+              <option value="Subsidy Request">Subsidy Request</option>
+              <option value="Subsidy Claimed">Subsidy Claimed (Final)</option>
             </select>
           </div>
           <div>
@@ -313,9 +327,11 @@
         <option value="Loan Sanction Pending">Loan Sanction Pending</option>
         <option value="Work Pending">Work Pending</option>
         <option value="KSEB Completion Pending">KSEB Completion Pending</option>
+        <option value="KSEB Online Completion">KSEB Online Completion</option>
         <option value="Bank Completion Pending">Bank Completion Pending</option>
         <option value="Commissioning Pending">Commissioning Pending</option>
-        <option value="Completed">Completed</option>
+        <option value="Subsidy Request">Subsidy Request</option>
+        <option value="Subsidy Claimed">Subsidy Claimed (Final)</option>
       </select>
     </div>
 
@@ -390,9 +406,11 @@
               <option value="Loan Sanction Pending">Loan Sanction Pending</option>
               <option value="Work Pending">Work Pending</option>
               <option value="KSEB Completion Pending">KSEB Completion Pending</option>
+              <option value="KSEB Online Completion">KSEB Online Completion</option>
               <option value="Bank Completion Pending">Bank Completion Pending</option>
               <option value="Commissioning Pending">Commissioning Pending</option>
-              <option value="Completed">Completed</option>
+              <option value="Subsidy Request">Subsidy Request</option>
+              <option value="Subsidy Claimed">Subsidy Claimed (Final)</option>
             </select>
           </div>
           <div>
@@ -409,10 +427,10 @@
   </div>
 
   <script>
-    // 1. YOUR GOOGLE SCRIPT URL
+    // 1. PASTE YOUR GOOGLE SCRIPT URL HERE
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmpFQdsOskyb_WQExQ1AC9A2G2nRSCnrmh6Cf7i_iCXHpRXCW41BoDbGalpDiD8OQw/exec";
 
-    // 2. SET YOUR DESIRED 4-DIGIT PIN HERE
+    // 2. SET YOUR PIN HERE
     const SECRET_PIN = "2026";
 
     let projects = [];
@@ -434,9 +452,8 @@
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
 
-    // PIN Authentication Logic
     function checkPin() {
-      if (pinInput.value === SECRET_PIN) {
+      if (pinInput.value.trim() === SECRET_PIN) {
         sessionStorage.setItem('solar_authenticated', 'true');
         loginOverlay.style.display = 'none';
         mainContainer.style.display = 'block';
@@ -462,7 +479,6 @@
       pinInput.value = '';
     }
 
-    // Auto-login if previously unlocked in this browser session
     if (sessionStorage.getItem('solar_authenticated') === 'true') {
       loginOverlay.style.display = 'none';
       mainContainer.style.display = 'block';
@@ -629,7 +645,7 @@
         .split(/[\s,]+/)
         .filter(k => k.length > 0);
 
-      let docsCount = 0, regCount = 0, loanCount = 0, subPending = 0, loanPending = 0, workPending = 0, ksebCount = 0, commCount = 0, overdueCount = 0;
+      let docsCount = 0, regCount = 0, loanCount = 0, subPending = 0, loanPending = 0, workPending = 0, ksebCount = 0, onlineCount = 0, commCount = 0, subReqCount = 0, subClaimedCount = 0, overdueCount = 0;
 
       projects.forEach(p => {
         if (p.status === 'Docs Pending') docsCount++;
@@ -639,8 +655,11 @@
         if (p.status === 'Loan Sanction Pending') loanPending++;
         if (p.status === 'Work Pending') workPending++;
         if (p.status === 'KSEB Completion Pending') ksebCount++;
+        if (p.status === 'KSEB Online Completion') onlineCount++;
         if (p.status === 'Commissioning Pending') commCount++;
-        if (p.dueDate && p.dueDate < today && p.status !== 'Completed') overdueCount++;
+        if (p.status === 'Subsidy Request') subReqCount++;
+        if (p.status === 'Subsidy Claimed') subClaimedCount++;
+        if (p.dueDate && p.dueDate < today && p.status !== 'Subsidy Claimed' && p.status !== 'Completed') overdueCount++;
       });
 
       document.getElementById('count-docs').innerText = docsCount;
@@ -650,7 +669,10 @@
       document.getElementById('count-loan-pending').innerText = loanPending;
       document.getElementById('count-work').innerText = workPending;
       document.getElementById('count-kseb').innerText = ksebCount;
+      document.getElementById('count-online').innerText = onlineCount;
       document.getElementById('count-comm').innerText = commCount;
+      document.getElementById('count-subreq').innerText = subReqCount;
+      document.getElementById('count-subclaimed').innerText = subClaimedCount;
       document.getElementById('count-overdue').innerText = overdueCount;
 
       const filtered = projects.filter(p => {
@@ -667,7 +689,8 @@
       });
 
       tableBody.innerHTML = filtered.map(p => {
-        const isOverdue = p.dueDate && p.dueDate < today && p.status !== 'Completed';
+        const isCompleted = p.status === 'Subsidy Claimed' || p.status === 'Completed';
+        const isOverdue = p.dueDate && p.dueDate < today && !isCompleted;
         const dateBadge = p.dueDate 
           ? `<span class="badge ${isOverdue ? 'badge-overdue' : 'badge-active'}">Due: ${p.dueDate}</span>` 
           : `<span style="color:#94a3b8">None</span>`;
@@ -698,9 +721,11 @@
                 <option value="Loan Sanction Pending" ${p.status === 'Loan Sanction Pending' ? 'selected' : ''}>Loan Sanction Pending</option>
                 <option value="Work Pending" ${p.status === 'Work Pending' ? 'selected' : ''}>Work Pending</option>
                 <option value="KSEB Completion Pending" ${p.status === 'KSEB Completion Pending' ? 'selected' : ''}>KSEB Completion Pending</option>
+                <option value="KSEB Online Completion" ${p.status === 'KSEB Online Completion' ? 'selected' : ''}>KSEB Online Completion</option>
                 <option value="Bank Completion Pending" ${p.status === 'Bank Completion Pending' ? 'selected' : ''}>Bank Completion Pending</option>
                 <option value="Commissioning Pending" ${p.status === 'Commissioning Pending' ? 'selected' : ''}>Commissioning Pending</option>
-                <option value="Completed" ${p.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                <option value="Subsidy Request" ${p.status === 'Subsidy Request' ? 'selected' : ''}>Subsidy Request</option>
+                <option value="Subsidy Claimed" ${p.status === 'Subsidy Claimed' ? 'selected' : ''}>Subsidy Claimed (Final)</option>
               </select>
             </td>
             <td>
