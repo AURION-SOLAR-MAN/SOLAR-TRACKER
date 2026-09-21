@@ -201,6 +201,11 @@
 
     <!-- Metrics Summary -->
     <div class="metrics-grid">
+      <!-- Total Customers Card -->
+      <div class="metric-card" style="border-left-color: #0f172a; background: #f1f5f9;">
+        <div class="metric-title" style="color: #0f172a;">Total Customers</div>
+        <div class="metric-val" id="count-total" style="color: #0f172a;">0</div>
+      </div>
       <div class="metric-card" style="border-left-color: #f59e0b;">
         <div class="metric-title">Docs Pending</div>
         <div class="metric-val" id="count-docs">0</div>
@@ -340,6 +345,7 @@
       <table>
         <thead>
           <tr>
+            <th style="width: 45px; text-align: center;">#</th>
             <th>Customer Info</th>
             <th>C/O</th>
             <th>Consumer No / Cap</th>
@@ -662,6 +668,8 @@
         if (p.dueDate && p.dueDate < today && p.status !== 'Subsidy Claimed' && p.status !== 'Completed') overdueCount++;
       });
 
+      // Update Metric Cards
+      document.getElementById('count-total').innerText = projects.length;
       document.getElementById('count-docs').innerText = docsCount;
       document.getElementById('count-reg').innerText = regCount;
       document.getElementById('count-loan').innerText = loanCount;
@@ -688,7 +696,7 @@
         return matchesSearch && matchesStage && matchesCO;
       });
 
-      tableBody.innerHTML = filtered.map(p => {
+      tableBody.innerHTML = filtered.map((p, index) => {
         const isCompleted = p.status === 'Subsidy Claimed' || p.status === 'Completed';
         const isOverdue = p.dueDate && p.dueDate < today && !isCompleted;
         const dateBadge = p.dueDate 
@@ -697,6 +705,7 @@
 
         return `
           <tr>
+            <td style="text-align: center; font-weight: bold; color: #64748b;">${index + 1}</td>
             <td>
               <strong>${p.name}</strong><br>
               <small style="color:#475569;">📞 ${p.phone} ${p.email ? '| ✉️ ' + p.email : ''}</small><br>
