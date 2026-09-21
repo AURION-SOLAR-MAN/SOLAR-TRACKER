@@ -466,12 +466,10 @@
 
   <script>
     // 1. PASTE YOUR GOOGLE SCRIPT URL HERE
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmpFQdsOskyb_WQExQ1AC9A2G2nRSCnrmh6Cf7i_iCXHpRXCW41BoDbGalpDiD8OQw/exec";
-
-    // 2. SET YOUR PIN HERE
-    const SECRET_PIN = "2026";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmpFQdsOskyb_WQExQ1AC9A2G2nRSCnrmh6Cf7i_icXHpRXCW41BoDbGalpDiD8sK4/exec";
 
     let projects = [];
+    let currentAuthPin = sessionStorage.getItem('solar_auth_pin') || '';
 
     const loginOverlay = document.getElementById('loginOverlay');
     const pinInput = document.getElementById('pinInput');
@@ -524,17 +522,38 @@
       return '';
     }
 
-    function checkPin() {
-      if (pinInput.value.trim() === SECRET_PIN) {
-        sessionStorage.setItem('solar_authenticated', 'true');
+    async function checkPin() {
+      const enteredPin = pinInput.value.trim();
+      if (!enteredPin) return;
+
+      loginError.style.display = 'none';
+      setLoading(true, "Verifying PIN...");
+
+      try {
+        const res = await fetch(`${SCRIPT_URL}?pin=${encodeURIComponent(enteredPin)}`);
+        const data = await res.json();
+
+        if (data.error === "Unauthorized") {
+          loginError.style.display = 'block';
+          pinInput.value = '';
+          pinInput.focus();
+          setLoading(false, "Denied");
+          return;
+        }
+
+        // Successfully authorized
+        currentAuthPin = enteredPin;
+        sessionStorage.setItem('solar_auth_pin', enteredPin);
         loginOverlay.style.display = 'none';
         mainContainer.style.display = 'block';
-        loginError.style.display = 'none';
-        fetchProjects();
-      } else {
+
+        processAndRender(data);
+        setLoading(false, "Synced");
+      } catch (err) {
+        console.error(err);
+        loginError.innerText = "Connection error. Try again.";
         loginError.style.display = 'block';
-        pinInput.value = '';
-        pinInput.focus();
+        setLoading(false, "Error");
       }
     }
 
@@ -543,17 +562,18 @@
     });
 
     function logout() {
-      sessionStorage.removeItem('solar_authenticated');
+      sessionStorage.removeItem('solar_auth_pin');
+      currentAuthPin = '';
       projects = [];
       render();
       mainContainer.style.display = 'none';
       loginOverlay.style.display = 'flex';
       pinInput.value = '';
+      pinInput.focus();
     }
 
-    if (sessionStorage.getItem('solar_authenticated') === 'true') {
-      loginOverlay.style.display = 'none';
-      mainContainer.style.display = 'block';
+    // Auto-login check if already authenticated in this browser session
+    if (currentAuthPin) {
       fetchProjects();
     } else {
       pinInput.focus();
@@ -564,45 +584,52 @@
       syncText.innerText = text;
     }
 
+    function processAndRender(data) {
+      const mapped = data.map(d => {
+        const lowKeys = {};
+        for (let k in d) {
+          lowKeys[k.trim().toLowerCase()] = d[k];
+        }
+
+        const rawDue = lowKeys['duedate'] || lowKeys['due date'] || lowKeys['due_date'] || '';
+        const rawDoc = lowKeys['docdate'] || lowKeys['doc date'] || lowKeys['doc_date'] || '';
+
+        return {
+          id: lowKeys['id'] || Date.now(),
+          name: lowKeys['name'] || '',
+          phone: lowKeys['phone'] || '',
+          email: lowKeys['email'] || '',
+          address: lowKeys['address'] || '',
+          consumerNo: lowKeys['consumerno'] || lowKeys['consumer no'] || '',
+          capacity: lowKeys['capacity'] || '',
+          co: lowKeys['co'] || lowKeys['c/o'] || '',
+          docDate: cleanDate(rawDoc),
+          status: lowKeys['status'] || 'Docs Pending',
+          dueDate: cleanDate(rawDue),
+          isLoan: lowKeys['isloan'] || 'No',
+          loanAmount: lowKeys['loanamount'] || ''
+        };
+      });
+      
+      projects = mapped.reverse();
+      render();
+    }
+
     async function fetchProjects() {
-      if (SCRIPT_URL.includes("PASTE_YOUR")) {
-        syncText.innerText = "Script URL not set!";
-        return;
-      }
       setLoading(true, "Fetching data...");
       try {
-        const res = await fetch(SCRIPT_URL);
+        const res = await fetch(`${SCRIPT_URL}?pin=${encodeURIComponent(currentAuthPin)}`);
         const data = await res.json();
-        
-        const mapped = data.map(d => {
-          const lowKeys = {};
-          for (let k in d) {
-            lowKeys[k.trim().toLowerCase()] = d[k];
-          }
 
-          const rawDue = lowKeys['duedate'] || lowKeys['due date'] || lowKeys['due_date'] || '';
-          const rawDoc = lowKeys['docdate'] || lowKeys['doc date'] || lowKeys['doc_date'] || '';
+        if (data.error === "Unauthorized") {
+          logout();
+          return;
+        }
 
-          return {
-            id: lowKeys['id'] || Date.now(),
-            name: lowKeys['name'] || '',
-            phone: lowKeys['phone'] || '',
-            email: lowKeys['email'] || '',
-            address: lowKeys['address'] || '',
-            consumerNo: lowKeys['consumerno'] || lowKeys['consumer no'] || '',
-            capacity: lowKeys['capacity'] || '',
-            co: lowKeys['co'] || lowKeys['c/o'] || '',
-            docDate: cleanDate(rawDoc),
-            status: lowKeys['status'] || 'Docs Pending',
-            dueDate: cleanDate(rawDue),
-            isLoan: lowKeys['isloan'] || 'No',
-            loanAmount: lowKeys['loanamount'] || ''
-          };
-        });
-        
-        projects = mapped.reverse();
+        loginOverlay.style.display = 'none';
+        mainContainer.style.display = 'block';
 
-        render();
+        processAndRender(data);
         setLoading(false, "Synced");
       } catch (err) {
         console.error(err);
@@ -613,6 +640,7 @@
     async function postData(body) {
       setLoading(true, "Saving...");
       try {
+        body.pin = currentAuthPin; // Send secure PIN with every write request
         await fetch(SCRIPT_URL, {
           method: "POST",
           mode: "no-cors",
