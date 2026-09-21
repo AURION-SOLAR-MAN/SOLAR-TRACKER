@@ -97,6 +97,13 @@
       border-radius: 6px;
       font-size: 0.85rem;
     }
+    .form-error {
+      color: var(--danger);
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-top: 8px;
+      display: none;
+    }
     button.btn-primary {
       background: var(--primary);
       color: #fff;
@@ -201,7 +208,6 @@
 
     <!-- Metrics Summary -->
     <div class="metrics-grid">
-      <!-- Total Customers Card -->
       <div class="metric-card" style="border-left-color: #0f172a; background: #f1f5f9;">
         <div class="metric-title" style="color: #0f172a;">Total Customers</div>
         <div class="metric-val" id="count-total" style="color: #0f172a;">0</div>
@@ -315,6 +321,7 @@
             <input type="date" id="custDueDate">
           </div>
         </div>
+        <div class="form-error" id="addFormError"></div>
         <button type="submit" id="submitBtn" class="btn-primary">Add Customer to Sheet</button>
       </form>
     </div>
@@ -424,6 +431,7 @@
             <input type="date" id="editDueDate">
           </div>
         </div>
+        <div class="form-error" id="editFormError"></div>
         <div style="display: flex; gap: 10px; margin-top: 16px;">
           <button type="submit" class="btn-primary" style="margin-top:0;">Save Changes</button>
           <button type="button" class="action-btn" onclick="closeEditModal()">Cancel</button>
@@ -450,6 +458,7 @@
     const syncText = document.getElementById('syncText');
     const form = document.getElementById('customerForm');
     const submitBtn = document.getElementById('submitBtn');
+    const addFormError = document.getElementById('addFormError');
     const tableBody = document.getElementById('tableBody');
     const searchFilter = document.getElementById('searchFilter');
     const coFilter = document.getElementById('coFilter');
@@ -457,6 +466,12 @@
 
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
+    const editFormError = document.getElementById('editFormError');
+
+    // Helper: Normalize consumer numbers for strict duplicate checks (removes whitespace, hyphens)
+    function cleanConsumerNo(str) {
+      return String(str || '').replace(/[\s-]/g, '').toLowerCase();
+    }
 
     function checkPin() {
       if (pinInput.value.trim() === SECRET_PIN) {
@@ -544,8 +559,24 @@
       }
     }
 
+    // Add Customer Form Submit with Duplicate Checking
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      addFormError.style.display = 'none';
+
+      const inputConsumer = document.getElementById('custConsumerNo').value.trim();
+      const cleanedInput = cleanConsumerNo(inputConsumer);
+
+      // Check if consumer number already exists in projects list
+      const existing = projects.find(p => cleanConsumerNo(p.consumerNo) === cleanedInput);
+      if (existing) {
+        addFormError.innerText = `⚠️ Error: Consumer No "${inputConsumer}" already exists under customer "${existing.name}"!`;
+        addFormError.style.display = 'block';
+        alert(`Duplicate Consumer Number!\n\nConsumer No: ${inputConsumer} already belongs to ${existing.name}.`);
+        document.getElementById('custConsumerNo').focus();
+        return;
+      }
+
       submitBtn.disabled = true;
 
       const newProj = {
@@ -555,7 +586,7 @@
         email: document.getElementById('custEmail').value.trim(),
         co: document.getElementById('custCO').value.trim(),
         address: document.getElementById('custAddress').value.trim(),
-        consumerNo: document.getElementById('custConsumerNo').value.trim(),
+        consumerNo: inputConsumer,
         capacity: document.getElementById('custCapacity').value.trim(),
         docDate: document.getElementById('custDocDate').value || '',
         status: document.getElementById('custStatus').value,
@@ -574,6 +605,7 @@
       const proj = projects.find(p => String(p.id) === String(id));
       if (!proj) return;
 
+      editFormError.style.display = 'none';
       document.getElementById('editId').value = proj.id;
       document.getElementById('editName').value = proj.name || '';
       document.getElementById('editPhone').value = proj.phone || '';
@@ -591,19 +623,35 @@
 
     function closeEditModal() {
       editModal.classList.remove('open');
+      editFormError.style.display = 'none';
     }
 
+    // Edit Form Submit with Duplicate Checking
     editForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const id = document.getElementById('editId').value;
-      const proj = projects.find(p => String(p.id) === String(id));
+      editFormError.style.display = 'none';
 
+      const id = document.getElementById('editId').value;
+      const inputConsumer = document.getElementById('editConsumerNo').value.trim();
+      const cleanedInput = cleanConsumerNo(inputConsumer);
+
+      // Check if another customer already has this consumer number
+      const duplicate = projects.find(p => String(p.id) !== String(id) && cleanConsumerNo(p.consumerNo) === cleanedInput);
+      if (duplicate) {
+        editFormError.innerText = `⚠️ Error: Consumer No "${inputConsumer}" is already used by "${duplicate.name}"!`;
+        editFormError.style.display = 'block';
+        alert(`Duplicate Consumer Number!\n\nConsumer No: ${inputConsumer} is already assigned to ${duplicate.name}.`);
+        document.getElementById('editConsumerNo').focus();
+        return;
+      }
+
+      const proj = projects.find(p => String(p.id) === String(id));
       if (proj) {
         proj.name = document.getElementById('editName').value.trim();
         proj.phone = document.getElementById('editPhone').value.trim();
         proj.email = document.getElementById('editEmail').value.trim();
         proj.co = document.getElementById('editCO').value.trim();
-        proj.consumerNo = document.getElementById('editConsumerNo').value.trim();
+        proj.consumerNo = inputConsumer;
         proj.capacity = document.getElementById('editCapacity').value.trim();
         proj.address = document.getElementById('editAddress').value.trim();
         proj.docDate = document.getElementById('editDocDate').value || '';
@@ -668,7 +716,6 @@
         if (p.dueDate && p.dueDate < today && p.status !== 'Subsidy Claimed' && p.status !== 'Completed') overdueCount++;
       });
 
-      // Update Metric Cards
       document.getElementById('count-total').innerText = projects.length;
       document.getElementById('count-docs').innerText = docsCount;
       document.getElementById('count-reg').innerText = regCount;
