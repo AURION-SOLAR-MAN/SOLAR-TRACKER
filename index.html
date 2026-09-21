@@ -522,7 +522,7 @@
       try {
         const res = await fetch(SCRIPT_URL);
         const data = await res.json();
-        projects = data.map(d => ({
+        const mapped = data.map(d => ({
           id: d.id,
           name: d.name,
           phone: d.phone,
@@ -535,8 +535,9 @@
           status: d.status,
           dueDate: d.duedate ? String(d.duedate).split('T')[0] : ''
         }));
+
+        projects = mapped.reverse();
         render();
-        setLoading(false, "Synced");
       } catch (err) {
         console.error(err);
         setLoading(false, "Sync Error");
