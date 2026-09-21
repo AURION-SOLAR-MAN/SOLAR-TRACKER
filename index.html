@@ -73,6 +73,13 @@
       border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.06);
       border-left: 4px solid var(--primary);
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .metric-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
     .metric-title { font-size: 0.70rem; color: #64748b; text-transform: uppercase; font-weight: 600; }
     .metric-val { font-size: 1.35rem; font-weight: bold; margin-top: 4px; }
@@ -207,57 +214,57 @@
       </div>
     </div>
 
-    <!-- Metrics Summary -->
+    <!-- Metrics Summary (Clickable to Filter) -->
     <div class="metrics-grid">
-      <div class="metric-card" style="border-left-color: #0f172a; background: #f1f5f9;">
+      <div class="metric-card" style="border-left-color: #0f172a; background: #f1f5f9;" onclick="filterByCardStage('ALL')">
         <div class="metric-title" style="color: #0f172a;">Total Customers</div>
         <div class="metric-val" id="count-total" style="color: #0f172a;">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #f59e0b;">
+      <div class="metric-card" style="border-left-color: #f59e0b;" onclick="filterByCardStage('Docs Pending')">
         <div class="metric-title">Docs Pending</div>
         <div class="metric-val" id="count-docs">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #6366f1;">
+      <div class="metric-card" style="border-left-color: #6366f1;" onclick="filterByCardStage('Registration')">
         <div class="metric-title">Registration</div>
         <div class="metric-val" id="count-reg">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #ec4899;">
+      <div class="metric-card" style="border-left-color: #ec4899;" onclick="filterByCardStage('Loan')">
         <div class="metric-title">Loan Process</div>
         <div class="metric-val" id="count-loan">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #3b82f6;">
+      <div class="metric-card" style="border-left-color: #3b82f6;" onclick="filterByCardStage('Bank Submission Pending')">
         <div class="metric-title">Bank Submit</div>
         <div class="metric-val" id="count-sub-pending">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #8b5cf6;">
+      <div class="metric-card" style="border-left-color: #8b5cf6;" onclick="filterByCardStage('Loan Sanction Pending')">
         <div class="metric-title">Loan Sanction</div>
         <div class="metric-val" id="count-loan-pending">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #eab308;">
+      <div class="metric-card" style="border-left-color: #eab308;" onclick="filterByCardStage('Work Pending')">
         <div class="metric-title">Work Pending</div>
         <div class="metric-val" id="count-work">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #06b6d4;">
+      <div class="metric-card" style="border-left-color: #06b6d4;" onclick="filterByCardStage('KSEB Completion Pending')">
         <div class="metric-title">KSEB Compl.</div>
         <div class="metric-val" id="count-kseb">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #0284c7;">
+      <div class="metric-card" style="border-left-color: #0284c7;" onclick="filterByCardStage('KSEB Online Completion')">
         <div class="metric-title">Online Compl.</div>
         <div class="metric-val" id="count-online">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #14b8a6;">
+      <div class="metric-card" style="border-left-color: #14b8a6;" onclick="filterByCardStage('Commissioning Pending')">
         <div class="metric-title">Commissioning</div>
         <div class="metric-val" id="count-comm">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #f97316;">
+      <div class="metric-card" style="border-left-color: #f97316;" onclick="filterByCardStage('Subsidy Request')">
         <div class="metric-title">Subsidy Req.</div>
         <div class="metric-val" id="count-subreq">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #10b981;">
+      <div class="metric-card" style="border-left-color: #10b981;" onclick="filterByCardStage('Subsidy Claimed')">
         <div class="metric-title">Subsidy Claimed</div>
         <div class="metric-val" id="count-subclaimed">0</div>
       </div>
-      <div class="metric-card" style="border-left-color: #ef4444;">
+      <div class="metric-card" style="border-left-color: #ef4444;" onclick="filterByCardStage('OVERDUE')">
         <div class="metric-title">Overdue Action</div>
         <div class="metric-val" id="count-overdue">0</div>
       </div>
@@ -465,13 +472,14 @@
   </div>
 
   <script>
-    // 1. PASTE YOUR GOOGLE SCRIPT URL HERE
+    // 1. YOUR WORKING GOOGLE SCRIPT URL
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmpFQdsOskyb_WQExQ1AC9A2G2nRSCnrmh6Cf7i_iCXHpRXCW41BoDbGalpDiD8OQw/exec";
 
-    // 2. SET YOUR PIN HERE
+    // 2. YOUR PIN
     const SECRET_PIN = "2026";
 
     let projects = [];
+    let selectedSpecialFilter = null;
 
     const loginOverlay = document.getElementById('loginOverlay');
     const pinInput = document.getElementById('pinInput');
@@ -564,11 +572,19 @@
       syncText.innerText = text;
     }
 
-    async function fetchProjects() {
-      if (SCRIPT_URL.includes("PASTE_YOUR")) {
-        syncText.innerText = "Script URL not set!";
-        return;
+    // Filter list by clicking metric card
+    function filterByCardStage(stageName) {
+      if (stageName === 'OVERDUE') {
+        stageFilter.value = 'ALL';
+        selectedSpecialFilter = 'OVERDUE';
+      } else {
+        selectedSpecialFilter = null;
+        stageFilter.value = stageName;
       }
+      render();
+    }
+
+    async function fetchProjects() {
       setLoading(true, "Fetching data...");
       try {
         const res = await fetch(SCRIPT_URL);
@@ -601,7 +617,6 @@
         });
         
         projects = mapped.reverse();
-
         render();
         setLoading(false, "Synced");
       } catch (err) {
@@ -812,7 +827,11 @@
                               (p.phone && String(p.phone).includes(q)) || 
                               (p.consumerNo && String(p.consumerNo).toLowerCase().includes(q));
         
-        const matchesStage = stage === 'ALL' || p.status === stage;
+        let matchesStage = stage === 'ALL' || p.status === stage;
+        if (selectedSpecialFilter === 'OVERDUE') {
+          const isCompleted = p.status === 'Subsidy Claimed' || p.status === 'Completed';
+          matchesStage = p.dueDate && p.dueDate < today && !isCompleted;
+        }
 
         const customerCO = (p.co || '').toLowerCase();
         const matchesCO = coKeywords.length === 0 || coKeywords.some(keyword => customerCO.includes(keyword));
@@ -886,7 +905,10 @@
 
     searchFilter.addEventListener('input', render);
     coFilter.addEventListener('input', render);
-    stageFilter.addEventListener('change', render);
+    stageFilter.addEventListener('change', () => {
+      selectedSpecialFilter = null;
+      render();
+    });
   </script>
 </body>
 </html>
