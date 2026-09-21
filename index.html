@@ -463,11 +463,16 @@
       </form>
     </div>
   </div>
- <script>
-  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmpFQdsOskyb_WQExQ1AC9A2G2nRSCnrmh6Cf7i_iCXHpRXCW41BoDbGalpDiD8OQw/exec";
-  const AUTH_HASH = "b72618cbfa321eb199676e1a967f67adcf774e1d6c8f6ec6d1f0545f448c3b5d";
-  // Encrypted hash of PIN (Nobody can read your real PIN from GitHub!)
-  let projects = [];
+
+  <script>
+    // 1. PASTE YOUR GOOGLE SCRIPT URL HERE
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmpFQdsOskyb_WQExQ1AC9A2G2nRSCnrmh6Cf7i_iCXHpRXCW41BoDbGalpDiD8OQw/exec";
+
+    // 2. SET YOUR PIN HERE
+    const SECRET_PIN = "2026";
+
+    let projects = [];
+
     const loginOverlay = document.getElementById('loginOverlay');
     const pinInput = document.getElementById('pinInput');
     const loginError = document.getElementById('loginError');
@@ -486,13 +491,6 @@
     const editModal = document.getElementById('editModal');
     const editForm = document.getElementById('editForm');
     const editFormError = document.getElementById('editFormError');
-
-    // SHA-256 Hash Function
-    async function sha256(str) {
-      const buffer = new TextEncoder().encode(str);
-      const hash = await crypto.subtle.digest('SHA-256', buffer);
-      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
 
     function toggleLoanAmount(prefix) {
       const isLoan = document.getElementById(prefix + 'IsLoan').value;
@@ -526,12 +524,9 @@
       return '';
     }
 
-    async function checkPin() {
-      const val = pinInput.value.trim();
-      const hash = await sha256(val);
-
-      if (hash === AUTH_HASH) {
-        sessionStorage.setItem('solar_auth', 'ok');
+    function checkPin() {
+      if (pinInput.value.trim() === SECRET_PIN) {
+        sessionStorage.setItem('solar_authenticated', 'true');
         loginOverlay.style.display = 'none';
         mainContainer.style.display = 'block';
         loginError.style.display = 'none';
@@ -548,16 +543,15 @@
     });
 
     function logout() {
-      sessionStorage.removeItem('solar_auth');
+      sessionStorage.removeItem('solar_authenticated');
       projects = [];
       render();
       mainContainer.style.display = 'none';
       loginOverlay.style.display = 'flex';
       pinInput.value = '';
-      pinInput.focus();
     }
 
-    if (sessionStorage.getItem('solar_auth') === 'ok') {
+    if (sessionStorage.getItem('solar_authenticated') === 'true') {
       loginOverlay.style.display = 'none';
       mainContainer.style.display = 'block';
       fetchProjects();
@@ -571,6 +565,10 @@
     }
 
     async function fetchProjects() {
+      if (SCRIPT_URL.includes("PASTE_YOUR")) {
+        syncText.innerText = "Script URL not set!";
+        return;
+      }
       setLoading(true, "Fetching data...");
       try {
         const res = await fetch(SCRIPT_URL);
@@ -603,6 +601,7 @@
         });
         
         projects = mapped.reverse();
+
         render();
         setLoading(false, "Synced");
       } catch (err) {
